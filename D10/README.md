@@ -1,0 +1,3 @@
+One mistake I had that I corrected with Michael Gilliland's video was the fact that we need to keep track of the quadrant in which points overlap. Since we normally just use the y/x ratio for angle to calculate overlap, we lose information on the sign of the x and y co-ordinate.
+
+For part 2, I took an obscene amount of time to translate the polar angle atan2 into the correct numbers needed to spin clockwise around the North axis.
