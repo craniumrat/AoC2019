@@ -16,7 +16,7 @@ traceShow' a = trace (show a) a
 
 {- Since the outputs are going be a triple at a time till the end, it's better to collect them one at a time. We are going to modify the program to return a single value every time.  -}
 
-output1 prog = unfoldr step (0, 0, prog)
+output1 ip base prog = unfoldr step (ip, base, prog)
   where
     step :: (Integer, Integer, M.Map Integer Integer) -> Maybe (Integer, (Integer, Integer, M.Map  Integer Integer))
     step (ip, base, prog) = do
@@ -28,7 +28,7 @@ output1 prog = unfoldr step (0, 0, prog)
 answer1 :: String -> String
 answer1 contents = let
     prog = stringToProg contents
-    l = length $ filter (\[_, _, ob] -> ob == 2) $ chunksOf 3 $ output1 prog
+    l = length $ filter (\[_, _, ob] -> ob == 2) $ chunksOf 3 $ output1 0 0 prog
   in
     show l
 
@@ -43,11 +43,50 @@ toIntCode i = replicate (5 - length d) 0 ++ d
   where
     d = digits 10 i
 
+{- Instead of getting a fixed board, we start off with an initial board by setting the pos 0 of the prog to value 2. That will result in a board along with a score given by the triple (-1, 0, score). Based on the position of the paddle, we have to provide an input of one of [-1, 0, 1] to indicate that the joystick moved left, stayed in the same place or right. We play the game until there are no block tiles. Then we get the final score.
+
+We have to keep track of 3 different values in the triplets:
+1. The number of blocks. The game stops when the block count is 0.
+2. The paddle x position. We will use it to calculate the direction the joystick iis supposed to move. Basically reduce the distance between the tiles.
+3. The score.
+-}
+--           (Maybe ballX, Maybe paddleX, Maybe score)        
+type State = (Maybe Integer, Maybe Integer, Maybe Integer)
+
+updateState :: (Integer, Integer, Integer) -> State -> State
+updateState ((-1), _, score) (bx, px, _) = (bx, px, Just score)
+updateState (bx, _, 4) (_, Just px, score) = (Just bx, Just px, score)
+updateState (px, _, 3) (Just bx, _, score) = (Just bx, Just px, score)
+updateState _ state = state
+
+nextInput :: State -> Integer
+nextInput ((Just bx), (Just px), _) = if (bx < px) then (-1) else if (bx > px) then 1 else 0
+nextInput _ = 0
+
+getScore :: State -> Integer
+getScore (_, _, Just score) = score
+    
+output2 prog = unfoldr step ((Just 0, Just 0, Just 0), (0, 0, prog))
+  where
+--    step :: (State, (Integer, Integer, M.Map Integer Integer)) -> Maybe (Integer, (State, (Integer, Integer, M.Map  Integer Integer)))
+    step (state, (ip, base, prog')) = do
+      let i = [nextInput state]
+      (ip1, base1, o1, prog1) <- runProg ip base i  prog'
+      x <- o1
+      (ip2, base2, o2, prog2) <- runProg ip1 base1 i prog1
+      y <- o2
+      (ip3, base3, o3, prog3) <- runProg ip2 base2 i prog2
+      ob <- o3
+      let state' = updateState (x, y, ob) state
+      let score = getScore state'
+      pure $ (score, (state', (ip3, base3, prog3)))
+
 answer2 :: String -> String
 answer2 contents = let
     prog = stringToProg contents
+    answer = last $ output2 $ M.insert 0 2 prog
   in
-    show prog
+    show answer
 
 runProg :: Integer -> Integer -> [Integer] -> M.Map Integer Integer -> Maybe (Integer, Integer, Maybe Integer, M.Map Integer Integer)
 runProg pos base inputs prog = case (toIntCode <$> M.lookup pos prog) of
@@ -136,5 +175,5 @@ main :: IO()
 main = do
   [file] <- getArgs
   contents <- readFile file
---  mapM_ putStrLn (answer2 contents)  
-  putStrLn (answer1 contents)
+  putStrLn (answer2 contents)  
+--   putStrLn (answer1 contents)
