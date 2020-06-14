@@ -21,6 +21,7 @@ import Data.Function (on)
 type Parser = Parsec Void String
 
 traceShow' a = trace (show a) a
+-- traceShow' = id
 
 sc :: Parser ()
 sc = L.space (skipSome spaceChar) CA.empty CA.empty
@@ -69,29 +70,50 @@ answer1 :: String -> String
 answer1 contents = show output
   where
     reactions = reactionsToIngredients $ parseReaction <$> lines contents
-    output = quantity [("FUEL", 1)] reactions
+    output = snd $ head $ quantity [("FUEL", 1)] reactions
 
 {- Given a [(Integer, String)] pair, grab the first one.
-   In the map, find the ingredients list and multiply the quantity with the fst of the value. Once we do that, group by name, add the values and repeat. The only key with no value in map will be "ORE". If we see an "ORE", leave it and go to the next one
--}
+   In the map, find the ingredients list and multiply the quantity with the fst of the value. Once we do that, group by name, add the values and repeat. The only key with no value in map will be "ORE". If we see an "ORE", leave it and go to the next one. Sometimes, we will have excess of an ingredient because we need less than what is produced. Store that as a negative value. Use that negative value to remove from other reactions if they require the same ingredient.
 
+Ignore processing any negative or zero values, and continue until we are left with "ORE"
+-}
+trillion = 1000000000000
+
+answer2 :: String -> String
+answer2 contents = show output
+  where
+    reactions = reactionsToIngredients $ parseReaction <$> lines contents
+    output = binarySearch reactions 1 trillion
+
+binarySearch :: Ingredients -> Integer -> Integer -> Integer
+binarySearch reactions lower upper =
+  case ((upper - lower) <= 1) of
+    True -> lower
+    otherwise -> case (needed < trillion) of
+      True -> binarySearch reactions (traceShow' ((lower + upper) `div` 2)) (traceShow' upper)
+      otherwise -> binarySearch reactions (traceShow' lower) (traceShow' ((lower + upper) `div` 2))
+  where
+    fuel = traceShow' $ (lower + upper) `div` 2
+    needed = traceShow' $ snd $ head $ quantity [("FUEL", fuel)] reactions
+      
+  
 quantity :: [(String, Integer)] -> Ingredients -> [(String, Integer)]
 quantity (c:cs) reactions =
-  if (snd c <= 0) then quantity (traceShow' $ (cs ++ [c])) reactions
+  if (snd c <= 0) then quantity (cs ++ [c]) reactions
   else
     case M.lookup (fst c) reactions of
-      Nothing -> if end (c:cs) then (c:cs)  else quantity (cs ++ [c]) reactions
+      Nothing -> if end (c:cs) then [c]  else quantity (cs ++ [c]) reactions
       Just (weight, ingredients) ->
         let
-          multiplier = traceShow' $ (ceiling $ fromIntegral (snd c) / fromIntegral weight)
-          negative = (traceShow' (snd c)) - (traceShow' $ (multiplier * weight))
-          neg = if (negative /= 0) then (traceShow' [(fst c, negative)]) else (traceShow' [])
+          multiplier = (ceiling $ fromIntegral (snd c) / fromIntegral weight)
+          negative = (snd c) - (multiplier * weight)
+          neg = if (negative /= 0) then [(fst c, negative)] else []
           weighted = (map (\(k, v) -> (k, multiplier * v)) ingredients) ++ neg
           sorted = sortBy (compare `on` fst) $ cs ++ weighted
           grouped = groupBy ((==) `on` fst) sorted
           mapped = map (\chemicals -> foldl1 (\(k, v1) (_, v2) -> (k, v1 + v2)) chemicals)  grouped
         in
-          quantity (traceShow' mapped) reactions
+          quantity mapped reactions
       
 
 end :: [(String, Integer)] -> Bool
@@ -102,5 +124,6 @@ main :: IO()
 main = do
   [file] <- getArgs
   contents <- readFile file
-  putStrLn (answer1 contents)  
+--  putStrLn (answer1 contents)
+  putStrLn (answer2 contents)
 
