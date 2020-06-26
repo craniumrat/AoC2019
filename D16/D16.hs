@@ -28,5 +28,26 @@ fft str = map (\(c, pos) -> fftForPos str pos) $ zip str [0..]
 
 answer1 = take 8 $ foldr (.) (id) (replicate 100 fft) input
 
+{-
+    The solution above is way too slow for a message that's a repeat of the input * 10000.
+-}
+
+{-
+   Thanks to the kind people on reddit and Joel Grus' video https://www.youtube.com/watch?v=Xmcw8m0rukk to help me understand what's going on....
+   The final offset after 100 iterations is given by the first 7 digits of our original input. Since all digits depend on the subsequent digits and the final digits are just (original digit + next output digit) `mod` 10 for the second half of the 6_500_000 inuput, we can just use a scanr to get the new digits.
+-}
+
+answer2 = show value
+  where
+    new_input = concat $ replicate 10000 input
+    offset = read $ take 7 new_input
+    suffix = map (digitToInt) $ drop offset new_input
+    value = take 8 $ foldr (.) (id) (replicate 100 fftFast) suffix
+    
+
+fftFast :: [Int] -> [Int]
+fftFast input = scanr (\c acc -> (c + acc) `mod` 10) 0 input
+
 main =
-  putStrLn answer1
+--   putStrLn answer1
+  putStrLn answer2
